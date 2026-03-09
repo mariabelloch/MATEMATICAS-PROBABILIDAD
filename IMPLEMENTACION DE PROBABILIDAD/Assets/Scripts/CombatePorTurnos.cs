@@ -17,6 +17,13 @@ public class CombatePorTurnos : MonoBehaviour
     public Slider barraVidaEnemigo;
     public TMP_Text textoTurno;
 
+    [Header("Estadísticas")]
+    public TMP_Text textoEstadisticas;
+    private int ataquesTotales = 0;
+    private int totalHits = 0;
+    private int totalMiss = 0;
+    private int totalCriticos = 0;
+
     [Header("Colores texto")]
     public Color colorMiss = Color.gray;
     public Color colorHit = Color.white;
@@ -38,9 +45,20 @@ public class CombatePorTurnos : MonoBehaviour
     public float danoMedioEnemigo = 15f;
     public float desviacionEnemigo = 4f;
 
+    public enum TipoArma
+    {
+        Uniforme,
+        Normal
+    }
+
+    [Header("Tipo de arma")]
+    public TipoArma armaJugador = TipoArma.Normal;
+    public TipoArma armaEnemigo = TipoArma.Uniforme;
+
     private void Start()
     {
         ActualizarUI("Empieza el combate. Turno: Jugador", colorHit);
+        ActualizarEstadisticas();
     }
 
     private void Update()
@@ -48,6 +66,18 @@ public class CombatePorTurnos : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space))
         {
             EjecutarTurno();
+        }
+    }
+
+    private float GenerarDanio(TipoArma tipoArma, float danoMedio, float desviacion)
+    {
+        if (tipoArma == TipoArma.Uniforme)
+        {
+            return Random.Range(danoMedio - desviacion, danoMedio + desviacion);
+        }
+        else
+        {
+            return Probabilidad.GenerarValorNormalClampeado(danoMedio, desviacion, 0f, 999f);
         }
     }
 
@@ -60,6 +90,7 @@ public class CombatePorTurnos : MonoBehaviour
         {
             ProcesarAtaque(
                 "Jugador",
+                armaJugador,
                 precisionJugador,
                 evasionEnemigo,
                 critJugador,
@@ -75,6 +106,7 @@ public class CombatePorTurnos : MonoBehaviour
         {
             ProcesarAtaque(
                 "Enemigo",
+                armaEnemigo,
                 precisionEnemigo,
                 evasionJugador,
                 critEnemigo,
@@ -87,15 +119,15 @@ public class CombatePorTurnos : MonoBehaviour
             turnoActual = Turno.Jugador;
         }
 
-        
         if (vidaEnemigo <= 0f)
-            ActualizarUI(" Enemigo derrotado. ¡Ganas!", colorCritico);
+            ActualizarUI("Enemigo derrotado. ¡Ganas!", colorCritico);
         else if (vidaJugador <= 0f)
-            ActualizarUI(" Has perdido.", colorCritico);
+            ActualizarUI("Has perdido.", colorCritico);
     }
 
     private void ProcesarAtaque(
         string atacante,
+        TipoArma tipoArma,
         float precision,
         float evasion,
         float probCrit,
@@ -105,28 +137,37 @@ public class CombatePorTurnos : MonoBehaviour
         ref float vidaObjetivo
     )
     {
+        ataquesTotales++;
+
         float pHit = Mathf.Clamp01(precision - evasion);
 
         if (!Probabilidad.Evento(pHit))
         {
-            ActualizarUI($"{atacante}  MISS", colorMiss);
+            totalMiss++;
+            ActualizarUI($"{atacante} ({tipoArma}) MISS", colorMiss);
+            ActualizarEstadisticas();
             return;
         }
 
-        float dano = Probabilidad.GenerarValorNormalClampeado(danoMedio, desviacion, 0f, 999f);
-
+        float dano = GenerarDanio(tipoArma, danoMedio, desviacion);
         bool critico = Probabilidad.Evento(probCrit);
+
+        totalHits++;
+
         if (critico)
         {
+            totalCriticos++;
             dano *= multCrit;
             vidaObjetivo = Mathf.Clamp(vidaObjetivo - dano, 0f, vidaMax);
-            ActualizarUI($"{atacante} CRÍTICO {dano:F1}", colorCritico);
+            ActualizarUI($"{atacante} ({tipoArma}) CRÍTICO {dano:F1}", colorCritico);
         }
         else
         {
             vidaObjetivo = Mathf.Clamp(vidaObjetivo - dano, 0f, vidaMax);
-            ActualizarUI($"{atacante}  HIT {dano:F1}", colorHit);
+            ActualizarUI($"{atacante} ({tipoArma}) HIT {dano:F1}", colorHit);
         }
+
+        ActualizarEstadisticas();
     }
 
     private void ActualizarUI(string mensaje, Color color)
@@ -154,13 +195,30 @@ public class CombatePorTurnos : MonoBehaviour
         Debug.Log(mensaje);
     }
 
-    
+    private void ActualizarEstadisticas()
+    {
+        if (textoEstadisticas != null)
+        {
+            textoEstadisticas.text =
+                "Ataques: " + ataquesTotales +
+                "\nHits: " + totalHits +
+                "\nMiss: " + totalMiss +
+                "\nCríticos: " + totalCriticos;
+        }
+    }
+
     public void ReiniciarCombate()
     {
         vidaJugador = vidaMax;
         vidaEnemigo = vidaMax;
         turnoActual = Turno.Jugador;
 
+        ataquesTotales = 0;
+        totalHits = 0;
+        totalMiss = 0;
+        totalCriticos = 0;
+
         ActualizarUI("Combate reiniciado. Turno: Jugador", colorHit);
+        ActualizarEstadisticas();
     }
 }
